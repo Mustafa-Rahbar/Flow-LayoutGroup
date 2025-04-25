@@ -2,7 +2,7 @@ using System.Collections.Generic;
 
 namespace UnityEngine.UI
 {
-    public class DynamicFlowLayoutGroup : LayoutGroup
+    public class FlexLayoutGroup : LayoutGroup
     {
         [SerializeField] private Vector2 spacing = Vector2.zero;
         [SerializeField] private bool reverseArrangement = false;
@@ -14,8 +14,46 @@ namespace UnityEngine.UI
         public override void CalculateLayoutInputHorizontal()
         {
             base.CalculateLayoutInputHorizontal();
-            CalculateLayout();
+
+            rows.Clear();
+            rowHeights.Clear();
+            rowWidths.Clear();
+
             float width = rectTransform.rect.width;
+            float maxWidth = width - padding.horizontal;
+
+            List<RectTransform> currentRow = new List<RectTransform>();
+            float currentX = 0f;
+            float rowHeight = 0f;
+
+            for (int i = 0; i < rectChildren.Count; i++)
+            {
+                RectTransform child = rectChildren[i];
+                Vector2 cellSize = child.sizeDelta;
+
+                if (currentRow.Count > 0 && currentX + cellSize.x > maxWidth)
+                {
+                    rows.Add(currentRow);
+                    rowHeights.Add(rowHeight);
+                    rowWidths.Add(currentX - spacing.x);
+
+                    currentRow = new List<RectTransform>();
+                    currentX = 0f;
+                    rowHeight = 0f;
+                }
+
+                currentRow.Add(child);
+                currentX += cellSize.x + spacing.x;
+                rowHeight = Mathf.Max(rowHeight, cellSize.y);
+            }
+
+            if (currentRow.Count > 0)
+            {
+                rows.Add(currentRow);
+                rowHeights.Add(rowHeight);
+                rowWidths.Add(currentX - spacing.x);
+            }
+
             SetLayoutInputForAxis(width, width, -1, 0);
         }
 
@@ -33,58 +71,30 @@ namespace UnityEngine.UI
 
         public override void SetLayoutHorizontal()
         {
-            SetCells();
+            SetCellsAlongAxis(0);
         }
 
         public override void SetLayoutVertical()
         {
-            SetCells();
+            SetCellsAlongAxis(1);
         }
 
-        private void CalculateLayout()
+        private void SetCellsAlongAxis(int axis)
         {
-            rows.Clear();
-            rowHeights.Clear();
-            rowWidths.Clear();
-
-            float maxWidth = rectTransform.rect.width - padding.horizontal;
-
-            List<RectTransform> currentRow = new List<RectTransform>();
-            float currentX = 0f;
-            float rowHeight = 0f;
-
-            for (int i = 0; i < rectChildren.Count; i++)
+            int count = base.rectChildren.Count;
+            if (axis == 0)
             {
-                var child = rectChildren[i];
-                float childWidth = LayoutUtility.GetPreferredSize(child, 0);
-                float childHeight = LayoutUtility.GetPreferredSize(child, 1);
-
-                if (currentRow.Count > 0 && currentX + childWidth > maxWidth)
+                for (int i = 0; i < count; i++)
                 {
-                    rows.Add(currentRow);
-                    rowHeights.Add(rowHeight);
-                    rowWidths.Add(currentX - spacing.x);
-
-                    currentRow = new List<RectTransform>();
-                    currentX = 0f;
-                    rowHeight = 0f;
+                    RectTransform rectTransform = base.rectChildren[i];
+                    m_Tracker.Add(this, rectTransform, DrivenTransformProperties.Anchors | DrivenTransformProperties.AnchoredPosition);
+                    rectTransform.anchorMin = Vector2.up;
+                    rectTransform.anchorMax = Vector2.up;
                 }
 
-                currentRow.Add(child);
-                currentX += childWidth + spacing.x;
-                rowHeight = Mathf.Max(rowHeight, childHeight);
+                return;
             }
 
-            if (currentRow.Count > 0)
-            {
-                rows.Add(currentRow);
-                rowHeights.Add(rowHeight);
-                rowWidths.Add(currentX - spacing.x);
-            }
-        }
-
-        private void SetCells()
-        {
             float contentHeight = 0f;
             for (int i = 0; i < rowHeights.Count; i++)
                 contentHeight += rowHeights[i] + spacing.y;
@@ -111,14 +121,13 @@ namespace UnityEngine.UI
                 for (int i = 0; i < row.Count; i++)
                 {
                     RectTransform child = row[i];
-                    float w = LayoutUtility.GetPreferredSize(child, 0);
-                    float h = LayoutUtility.GetPreferredSize(child, 1);
+                    Vector2 cellSize = child.sizeDelta;
 
-                    float posX = reverseArrangement ? xStart + (rowWidth - (x - xStart)) - w : x;
-                    SetChildAlongAxis(child, 0, posX, w);
-                    SetChildAlongAxis(child, 1, y, h);
+                    float posX = reverseArrangement ? xStart + (rowWidth - (x - xStart)) - cellSize.x : x;
+                    SetChildAlongAxis(child, 0, posX);
+                    SetChildAlongAxis(child, 1, y);
 
-                    x += w + spacing.x;
+                    x += cellSize.x + spacing.x;
                 }
 
                 y += rowHeight + spacing.y;

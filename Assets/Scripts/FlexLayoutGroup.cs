@@ -17,25 +17,26 @@ namespace UnityEngine.UI
         public Vector2 cellSize { get => m_CellSize; set => SetProperty(ref m_CellSize, value); }
         public Vector2 spacing { get => m_Spacing; set => SetProperty(ref m_Spacing, value); }
 
-        private List<List<RectTransform>> rows = new List<List<RectTransform>>();
-        private List<float> m_RowHeights = new List<float>();
-        private List<float> m_RowWidths = new List<float>();
+        private struct CellData
+        {
+            public int x;
+            public int y;
+        }
+
+        private List<CellData> cellDataList = new List<CellData>();
+        float totalWidth;
+        float totalHeight;
+        int actualRowCount;
 
         public override void CalculateLayoutInputHorizontal()
         {
             base.CalculateLayoutInputHorizontal();
             CalcLayout();
-            float width = rectTransform.rect.width;
-            SetLayoutInputForAxis(width, width, -1, 0);
+            SetLayoutInputForAxis(totalWidth, totalWidth, -1, 0);
         }
 
         public override void CalculateLayoutInputVertical()
         {
-            float totalHeight = padding.vertical;
-            foreach (var h in m_RowHeights)
-                totalHeight += h + spacing.y;
-            if (m_RowHeights.Count > 0)
-                totalHeight -= spacing.y;
             SetLayoutInputForAxis(totalHeight, totalHeight, -1, 1);
         }
 
@@ -51,131 +52,75 @@ namespace UnityEngine.UI
 
         private void CalcLayout()
         {
-            rows.Clear();
-            m_RowHeights.Clear();
-            m_RowWidths.Clear();
+            cellDataList.Clear();
+
+            actualRowCount = 1;
+            totalWidth = 0f;
+            totalHeight = 0f;
 
             float width = rectTransform.rect.width;
             float availableWidth = width - padding.horizontal;
-            List<RectTransform> currentRow = new List<RectTransform>();
 
             float currentX = 0f;
+            float currentY = 0f;
+            float rowWidth = 0f;
             float rowHeight = 0f;
 
-            for (int i = 0; i < rectChildren.Count; i++)
+            int count = rectChildren.Count;
+            for (int i = 0; i < count; i++)
             {
-                var child = rectChildren[i];
+                RectTransform child = rectChildren[i];
                 float childWidth = child.rect.width;
                 float childHeight = child.rect.height;
 
-                // Debug log to check if child fits in the current row or if it wraps
-                Debug.Log($"Child {i}: Width={childWidth}, CurrentX={currentX}, AvailableWidth={availableWidth}");
-
-                if (currentRow.Count > 0 && currentX + childWidth > availableWidth)
+                if (currentX + childWidth > availableWidth)
                 {
-                    rows.Add(currentRow);
-                    m_RowHeights.Add(rowHeight);
-                    m_RowWidths.Add(currentX - spacing.x);
-
-                    currentRow = new List<RectTransform>();
+                    actualRowCount++;
+                    currentY += rowHeight + spacing.y;
                     currentX = 0f;
-                    rowHeight = 0f;
                 }
 
-                currentRow.Add(child);
                 currentX += childWidth + spacing.x;
-                rowHeight = Mathf.Max(rowHeight, childHeight);
+                rowWidth = Mathf.Max(childWidth, currentX - spacing.x);
+                rowHeight = Mathf.Max(childHeight, currentY - spacing.y);
+
+                cellDataList.Add(new CellData());
             }
 
-            if (currentRow.Count > 0)
-            {
-                rows.Add(currentRow);
-                m_RowHeights.Add(rowHeight);
-                m_RowWidths.Add(currentX - spacing.x);
-            }
-
-            // Debug logs to check rows, row widths, and row heights
-            Debug.Log($"Rows: {rows.Count}");
-            for (int i = 0; i < rows.Count; i++)
-            {
-                Debug.Log($"Row {i}: Width={m_RowWidths[i]}, Height={m_RowHeights[i]}");
-            }
+            totalWidth = rowWidth + padding.horizontal;
+            totalHeight = rowHeight + padding.vertical;
         }
 
         private void SetCellsAlongAxis(int axis)
         {
-            int count = base.rectChildren.Count;
+            int count = rectChildren.Count;
             if (axis == 0)
             {
-                // Handle horizontal layout
                 for (int i = 0; i < count; i++)
                 {
-                    RectTransform rectTransform = base.rectChildren[i];
+                    RectTransform rectTransform = rectChildren[i];
                     m_Tracker.Add(this, rectTransform, DrivenTransformProperties.Anchors | DrivenTransformProperties.AnchoredPosition);
-                    rectTransform.anchorMin = Vector2.up;
-                    rectTransform.anchorMax = Vector2.up;
+                    rectTransform.anchorMin = rectTransform.anchorMax = Vector2.up; // top-left
                 }
 
                 return;
             }
 
-            float parentWidth = rectTransform.rect.width;
-            float parentHeight = rectTransform.rect.height;
-
-            bool flipX = startCorner == Corner.UpperRight || startCorner == Corner.LowerRight;
-            bool flipY = startCorner == Corner.LowerLeft || startCorner == Corner.LowerRight;
-
-            // Calculate total vertical size
-            float requiredHeight = 0f;
-            count = m_RowHeights.Count;
             for (int i = 0; i < count; i++)
-                requiredHeight += m_RowHeights[i] + spacing.y;
-            if (count > 0) requiredHeight -= spacing.y;
-
-            // Proper starting Y
-            float yStart = GetStartOffset(1, requiredHeight);
-            if (flipY)
-                yStart = parentHeight - yStart - requiredHeight;
-
-            float y = yStart;
-
-            for (int rowIndex = 0; rowIndex < rows.Count; rowIndex++)
             {
-                var row = rows[rowIndex];
-                float rowHeight = m_RowHeights[rowIndex];
-                float rowWidth = m_RowWidths[rowIndex];
+                RectTransform child = rectChildren[i];
+                float childWidth = child.rect.width;
+                float childHeight = child.rect.height;
 
-                // Proper starting X
-                float xStart = GetStartOffset(0, rowWidth);
-                if (flipX)
-                    xStart = parentWidth - xStart - rowWidth;
+                CellData data = cellDataList[i];
 
-                float x = xStart;
+                float startX = GetStartOffset(0, totalWidth);
+                float startY = GetStartOffset(1, totalHeight);
+                float posX = startX + childWidth / 2f;
+                float posY = startY;
 
-                for (int i = 0; i < row.Count; i++)
-                {
-                    RectTransform child = row[i];
-                    Vector2 childSize = child.rect.size;
-
-                    // Correct position for current row
-                    float posX = x;
-                    float posY = y;
-
-                    SetChildAlongAxis(child, 0, posX);
-                    SetChildAlongAxis(child, 1, posY);
-
-                    // Move x position correctly after setting
-                    if (flipX)
-                        x -= childSize.x + spacing.x;  // For right-side flip, move x left
-                    else
-                        x += childSize.x + spacing.x;  // For left-side, move x right
-                }
-
-                // Adjust y position based on flipY
-                if (flipY)
-                    y -= rowHeight + spacing.y;  // For bottom flip, move y upwards
-                else
-                    y += rowHeight + spacing.y;  // For top-side, move y downwards
+                SetChildAlongAxis(child, 0, posX);
+                SetChildAlongAxis(child, 1, posY);
             }
         }
     }

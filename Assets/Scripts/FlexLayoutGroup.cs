@@ -22,30 +22,45 @@ namespace UnityEngine.UI
             public int x;
             public int y;
 
-            public CellData(int _x, int _y)
+            public CellData(int X, int Y)
             {
-                x = _x;
-                y = _y;
+                x = X;
+                y = Y;
             }
         }
 
-        private List<CellData> cellDataList = new List<CellData>();
-        private float totalWidth;
-        private float totalHeight;
-        private int actualRowCount;
-        private int actualColumnCount;
+        private struct RowData
+        {
+            public float width;
+            public float height;
+            public int itemCount;
+
+            public RowData(float _width, float _height, int _itemCount)
+            {
+                width = _width;
+                height = _height;
+                itemCount = _itemCount;
+            }
+        }
+
+        private List<CellData> m_CellDataList = new List<CellData>();
+        private List<RowData> m_RowDataList = new List<RowData>();
+        private List<RowData> m_ColumnDataList = new List<RowData>();
+
+        private float maxWidth;
+        private float maxHeight;
 
         public override void CalculateLayoutInputHorizontal()
         {
             base.CalculateLayoutInputHorizontal();
             CalcLayout();
-            float width = totalWidth + padding.horizontal;
+            float width = maxWidth + padding.horizontal;
             SetLayoutInputForAxis(width, width, -1, 0);
         }
 
         public override void CalculateLayoutInputVertical()
         {
-            float height = totalHeight + padding.vertical;
+            float height = maxHeight + padding.vertical;
             SetLayoutInputForAxis(height, height, -1, 1);
         }
 
@@ -61,16 +76,21 @@ namespace UnityEngine.UI
 
         private void CalcLayout()
         {
-            cellDataList.Clear();
-            totalWidth = totalHeight = 0f;
-            actualRowCount = actualColumnCount = 0;
+            m_CellDataList.Clear();
+            m_RowDataList.Clear();
+            m_ColumnDataList.Clear();
+            maxWidth = maxHeight = 0f;
 
             float width = rectTransform.rect.width;
             float availableWidth = width - padding.horizontal;
 
             float currentX = 0f;
             float currentY = 0f;
-            float maxRowHeight = 0f;
+
+            float rowMaxHeight = 0f;
+            float rowTotalWidth = 0f;
+            int rowItemCount = 0;
+
 
             int x = 0, y = 0;
             int count = rectChildren.Count;
@@ -80,27 +100,36 @@ namespace UnityEngine.UI
                 float childWidth = child.rect.width;
                 float childHeight = child.rect.height;
 
-                if (currentX > 0f && currentX + childWidth > availableWidth)
+                if (rowItemCount > 0 && currentX + childWidth > availableWidth)
                 {
-                    currentY += maxRowHeight + spacing.y;
+                    m_RowDataList.Add(new RowData(rowTotalWidth - spacing.x, rowMaxHeight, rowItemCount));
+
+                    currentY += rowMaxHeight + spacing.y;
                     currentX = 0f;
-                    maxRowHeight = 0f;
+                    rowMaxHeight = 0f;
+                    rowTotalWidth = 0f;
+                    rowItemCount = 0;
+
                     x = 0;
                     y++;
                 }
 
-                cellDataList.Add(new CellData(x, y));
-
                 currentX += childWidth + spacing.x;
-                maxRowHeight = Mathf.Max(maxRowHeight, childHeight);
+                rowTotalWidth += childWidth + spacing.x;
+                rowMaxHeight = Mathf.Max(rowMaxHeight, childHeight);
+                rowItemCount++;
 
-                totalWidth = Mathf.Max(totalWidth, currentX - spacing.x);
-                totalHeight = currentY + maxRowHeight;
-
-                actualRowCount = Mathf.Max(actualRowCount, y + 1);
-                actualColumnCount = Mathf.Max(actualColumnCount, x + 1);
+                maxWidth = Mathf.Max(maxWidth, rowTotalWidth - spacing.x);
+                maxHeight = Mathf.Max(maxHeight, currentY + rowMaxHeight);
+                m_CellDataList.Add(new CellData(x, y));
 
                 x++;
+            }
+
+            // add last row if not added
+            if (rowItemCount > 0)
+            {
+                m_RowDataList.Add(new RowData(rowTotalWidth - spacing.x, rowMaxHeight, rowItemCount));
             }
         }
 
@@ -119,24 +148,31 @@ namespace UnityEngine.UI
                 return;
             }
 
-            float startX = GetStartOffset(0, totalWidth);
-            float startY = GetStartOffset(1, totalHeight);
+            float startX = 0f;
+            float startY = GetStartOffset(1, maxHeight);
 
+            int lastVisualRow = -1;
             for (int i = 0; i < count; i++)
             {
-                RectTransform child = rectChildren[i];
-                CellData cell = cellDataList[i];
+                CellData cell = m_CellDataList[i];
 
                 int positionX = cell.x;
                 int positionY = cell.y;
 
+                RowData row = m_RowDataList[positionY];
+
                 if ((int)startCorner % 2 == 1)
-                    positionX = actualColumnCount - 1 - positionX;
+                    positionX = row.itemCount - 1 - positionX;
                 if ((int)startCorner / 2 == 1)
-                    positionY = actualRowCount - 1 - positionY;
+                    positionY = m_RowDataList.Count - 1 - positionY;
 
-                Vector2 size = child.rect.size;
+                if (lastVisualRow != positionY)
+                {
+                    lastVisualRow = positionY;
+                    startX = GetStartOffset(0, row.width);
+                }
 
+                Vector2 size = rectChildren[i].rect.size;
                 SetChildAlongAxis(rectChildren[i], 0, startX + (spacing.x + size.x) * positionX);
                 SetChildAlongAxis(rectChildren[i], 1, startY + (spacing.y + size.y) * positionY);
             }

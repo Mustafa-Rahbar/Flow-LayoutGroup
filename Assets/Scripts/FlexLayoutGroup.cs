@@ -4,69 +4,39 @@ namespace UnityEngine.UI
 {
     public class FlexLayoutGroup : LayoutGroup
     {
-        [SerializeField] private Vector2 spacing = Vector2.zero;
-        [SerializeField] private bool reverseArrangement = false;
+        public enum Corner { UpperLeft, UpperRight, LowerLeft, LowerRight }
+        public enum Axis { Horizontal, Vertical }
+
+        [SerializeField] protected Corner m_StartCorner;
+        [SerializeField] protected Axis m_StartAxis;
+        [SerializeField] protected Vector2 m_CellSize = new Vector2(100f, 100f);
+        [SerializeField] protected Vector2 m_Spacing = Vector2.zero;
+
+        public Corner startCorner { get => m_StartCorner; set => SetProperty(ref m_StartCorner, value); }
+        public Axis startAxis { get => m_StartAxis; set => SetProperty(ref m_StartAxis, value); }
+        public Vector2 cellSize { get => m_CellSize; set => SetProperty(ref m_CellSize, value); }
+        public Vector2 spacing { get => m_Spacing; set => SetProperty(ref m_Spacing, value); }
 
         private List<List<RectTransform>> rows = new List<List<RectTransform>>();
-        private List<float> rowHeights = new List<float>();
-        private List<float> rowWidths = new List<float>();
+        private List<float> m_RowHeights = new List<float>();
+        private List<float> m_RowWidths = new List<float>();
 
         public override void CalculateLayoutInputHorizontal()
         {
             base.CalculateLayoutInputHorizontal();
-
-            rows.Clear();
-            rowHeights.Clear();
-            rowWidths.Clear();
-
+            CalcLayout();
             float width = rectTransform.rect.width;
-            float maxWidth = width - padding.horizontal;
-
-            List<RectTransform> currentRow = new List<RectTransform>();
-            float currentX = 0f;
-            float rowHeight = 0f;
-
-            for (int i = 0; i < rectChildren.Count; i++)
-            {
-                RectTransform child = rectChildren[i];
-                Vector2 cellSize = child.sizeDelta;
-
-                if (currentRow.Count > 0 && currentX + cellSize.x > maxWidth)
-                {
-                    rows.Add(currentRow);
-                    rowHeights.Add(rowHeight);
-                    rowWidths.Add(currentX - spacing.x);
-
-                    currentRow = new List<RectTransform>();
-                    currentX = 0f;
-                    rowHeight = 0f;
-                }
-
-                currentRow.Add(child);
-                currentX += cellSize.x + spacing.x;
-                rowHeight = Mathf.Max(rowHeight, cellSize.y);
-            }
-
-            if (currentRow.Count > 0)
-            {
-                rows.Add(currentRow);
-                rowHeights.Add(rowHeight);
-                rowWidths.Add(currentX - spacing.x);
-            }
-
             SetLayoutInputForAxis(width, width, -1, 0);
         }
 
         public override void CalculateLayoutInputVertical()
         {
-            float height = padding.vertical;
-            foreach (var rowHeight in rowHeights)
-                height += rowHeight + spacing.y;
-
-            if (rowHeights.Count > 0)
-                height -= spacing.y; // remove last spacing
-
-            SetLayoutInputForAxis(height, height, -1, 1);
+            float totalHeight = padding.vertical;
+            foreach (var h in m_RowHeights)
+                totalHeight += h + spacing.y;
+            if (m_RowHeights.Count > 0)
+                totalHeight -= spacing.y;
+            SetLayoutInputForAxis(totalHeight, totalHeight, -1, 1);
         }
 
         public override void SetLayoutHorizontal()
@@ -79,11 +49,65 @@ namespace UnityEngine.UI
             SetCellsAlongAxis(1);
         }
 
+        private void CalcLayout()
+        {
+            rows.Clear();
+            m_RowHeights.Clear();
+            m_RowWidths.Clear();
+
+            float width = rectTransform.rect.width;
+            float availableWidth = width - padding.horizontal;
+            List<RectTransform> currentRow = new List<RectTransform>();
+
+            float currentX = 0f;
+            float rowHeight = 0f;
+
+            for (int i = 0; i < rectChildren.Count; i++)
+            {
+                var child = rectChildren[i];
+                float childWidth = child.rect.width;
+                float childHeight = child.rect.height;
+
+                // Debug log to check if child fits in the current row or if it wraps
+                Debug.Log($"Child {i}: Width={childWidth}, CurrentX={currentX}, AvailableWidth={availableWidth}");
+
+                if (currentRow.Count > 0 && currentX + childWidth > availableWidth)
+                {
+                    rows.Add(currentRow);
+                    m_RowHeights.Add(rowHeight);
+                    m_RowWidths.Add(currentX - spacing.x);
+
+                    currentRow = new List<RectTransform>();
+                    currentX = 0f;
+                    rowHeight = 0f;
+                }
+
+                currentRow.Add(child);
+                currentX += childWidth + spacing.x;
+                rowHeight = Mathf.Max(rowHeight, childHeight);
+            }
+
+            if (currentRow.Count > 0)
+            {
+                rows.Add(currentRow);
+                m_RowHeights.Add(rowHeight);
+                m_RowWidths.Add(currentX - spacing.x);
+            }
+
+            // Debug logs to check rows, row widths, and row heights
+            Debug.Log($"Rows: {rows.Count}");
+            for (int i = 0; i < rows.Count; i++)
+            {
+                Debug.Log($"Row {i}: Width={m_RowWidths[i]}, Height={m_RowHeights[i]}");
+            }
+        }
+
         private void SetCellsAlongAxis(int axis)
         {
             int count = base.rectChildren.Count;
             if (axis == 0)
             {
+                // Handle horizontal layout
                 for (int i = 0; i < count; i++)
                 {
                     RectTransform rectTransform = base.rectChildren[i];
@@ -95,90 +119,63 @@ namespace UnityEngine.UI
                 return;
             }
 
-            float contentHeight = 0f;
-            for (int i = 0; i < rowHeights.Count; i++)
-                contentHeight += rowHeights[i] + spacing.y;
-            if (rowHeights.Count > 0)
-                contentHeight -= spacing.y;
+            float parentWidth = rectTransform.rect.width;
+            float parentHeight = rectTransform.rect.height;
 
-            float availableHeight = rectTransform.rect.height - padding.vertical;
-            float startY = GetStartOffsetForColoumn(availableHeight, contentHeight);
-            float y = startY;
+            bool flipX = startCorner == Corner.UpperRight || startCorner == Corner.LowerRight;
+            bool flipY = startCorner == Corner.LowerLeft || startCorner == Corner.LowerRight;
 
-            float layoutWidth = rectTransform.rect.width - padding.horizontal;
+            // Calculate total vertical size
+            float requiredHeight = 0f;
+            count = m_RowHeights.Count;
+            for (int i = 0; i < count; i++)
+                requiredHeight += m_RowHeights[i] + spacing.y;
+            if (count > 0) requiredHeight -= spacing.y;
+
+            // Proper starting Y
+            float yStart = GetStartOffset(1, requiredHeight);
+            if (flipY)
+                yStart = parentHeight - yStart - requiredHeight;
+
+            float y = yStart;
+
             for (int rowIndex = 0; rowIndex < rows.Count; rowIndex++)
             {
                 var row = rows[rowIndex];
-                float rowHeight = rowHeights[rowIndex];
-                float rowWidth = rowWidths[rowIndex];
+                float rowHeight = m_RowHeights[rowIndex];
+                float rowWidth = m_RowWidths[rowIndex];
 
-                float xStart = GetStartOffsetForRow(layoutWidth, rowWidth);
+                // Proper starting X
+                float xStart = GetStartOffset(0, rowWidth);
+                if (flipX)
+                    xStart = parentWidth - xStart - rowWidth;
+
                 float x = xStart;
-
-                if (reverseArrangement)
-                    row.Reverse();
 
                 for (int i = 0; i < row.Count; i++)
                 {
                     RectTransform child = row[i];
-                    Vector2 cellSize = child.sizeDelta;
+                    Vector2 childSize = child.rect.size;
 
-                    float posX = reverseArrangement ? xStart + (rowWidth - (x - xStart)) - cellSize.x : x;
+                    // Correct position for current row
+                    float posX = x;
+                    float posY = y;
+
                     SetChildAlongAxis(child, 0, posX);
-                    SetChildAlongAxis(child, 1, y);
+                    SetChildAlongAxis(child, 1, posY);
 
-                    x += cellSize.x + spacing.x;
+                    // Move x position correctly after setting
+                    if (flipX)
+                        x -= childSize.x + spacing.x;  // For right-side flip, move x left
+                    else
+                        x += childSize.x + spacing.x;  // For left-side, move x right
                 }
 
-                y += rowHeight + spacing.y;
-            }
-        }
-
-        private float GetStartOffsetForRow(float totalWidth, float rowWidth)
-        {
-            switch (childAlignment)
-            {
-                case TextAnchor.UpperLeft:
-                case TextAnchor.MiddleLeft:
-                case TextAnchor.LowerLeft:
-                    return padding.left;
-
-                case TextAnchor.UpperCenter:
-                case TextAnchor.MiddleCenter:
-                case TextAnchor.LowerCenter:
-                    return padding.left + (totalWidth - rowWidth) / 2f;
-
-                case TextAnchor.UpperRight:
-                case TextAnchor.MiddleRight:
-                case TextAnchor.LowerRight:
-                    return padding.left + (totalWidth - rowWidth);
-
-                default:
-                    return padding.left;
-            }
-        }
-
-        private float GetStartOffsetForColoumn(float totalHeight, float contentHeight)
-        {
-            switch (childAlignment)
-            {
-                case TextAnchor.UpperLeft:
-                case TextAnchor.UpperCenter:
-                case TextAnchor.UpperRight:
-                    return padding.top;
-
-                case TextAnchor.MiddleLeft:
-                case TextAnchor.MiddleCenter:
-                case TextAnchor.MiddleRight:
-                    return padding.top + (totalHeight - contentHeight) / 2f;
-
-                case TextAnchor.LowerLeft:
-                case TextAnchor.LowerCenter:
-                case TextAnchor.LowerRight:
-                    return padding.top + (totalHeight - contentHeight);
-
-                default:
-                    return padding.top;
+                // Adjust y position based on flipY
+                if (flipY)
+                    y -= rowHeight + spacing.y;  // For bottom flip, move y upwards
+                else
+                    y += rowHeight + spacing.y;  // For top-side, move y downwards
             }
         }
     }

@@ -21,11 +21,19 @@ namespace UnityEngine.UI
         {
             public int x;
             public int y;
+
+            public CellData(int _x, int _y)
+            {
+                x = _x;
+                y = _y;
+            }
         }
 
         private List<CellData> cellDataList = new List<CellData>();
-        float totalWidth;
-        float totalHeight;
+        private float totalWidth;
+        private float totalHeight;
+        private int actualRowCount;
+        private int actualColumnCount;
 
         public override void CalculateLayoutInputHorizontal()
         {
@@ -54,9 +62,8 @@ namespace UnityEngine.UI
         private void CalcLayout()
         {
             cellDataList.Clear();
-
-            totalWidth = 0f;
-            totalHeight = 0f;
+            totalWidth = totalHeight = 0f;
+            actualRowCount = actualColumnCount = 0;
 
             float width = rectTransform.rect.width;
             float availableWidth = width - padding.horizontal;
@@ -64,6 +71,7 @@ namespace UnityEngine.UI
             float currentX = 0f;
             float currentY = 0f;
 
+            int x = 0, y = 0;
             int count = rectChildren.Count;
             for (int i = 0; i < count; i++)
             {
@@ -75,13 +83,18 @@ namespace UnityEngine.UI
                 {
                     currentY += totalHeight + spacing.y;
                     currentX = 0f;
+
+                    x = 0; y++;
                 }
 
-                currentX += childWidth + spacing.x;
                 totalWidth = Mathf.Max(childWidth, currentX - spacing.x);
                 totalHeight = Mathf.Max(childHeight, currentY - spacing.y);
+                actualRowCount = Mathf.Max(actualRowCount, y + 1);
+                actualColumnCount = Mathf.Max(actualColumnCount, x + 1);
+                cellDataList.Add(new CellData(x, y));
 
-                cellDataList.Add(new CellData());
+                currentX += childWidth + spacing.x;
+                x++;
             }
         }
 
@@ -100,22 +113,26 @@ namespace UnityEngine.UI
                 return;
             }
 
+            float width = rectTransform.rect.width;
+            float height = rectTransform.rect.height;
+
             for (int i = 0; i < count; i++)
             {
                 RectTransform child = rectChildren[i];
-                float childWidth = child.rect.width;
-                float childHeight = child.rect.height;
+                CellData cell = cellDataList[i];
 
-                CellData data = cellDataList[i];
+                int positionX = cell.x;
+                int positionY = cell.y;
 
-                float startX = GetStartOffset(0, totalWidth);
-                float startY = GetStartOffset(1, totalHeight);
+                if ((int)startCorner % 2 == 1)
+                    positionX = actualColumnCount - 1 - positionX;
+                if ((int)startCorner / 2 == 1)
+                    positionY = actualRowCount - 1 - positionY;
 
-                float posX = startX + childWidth / 2f;
-                float posY = startY;
+                Vector2 size = child.rect.size;
 
-                SetChildAlongAxis(child, 0, posX);
-                SetChildAlongAxis(child, 1, posY);
+                SetChildAlongAxis(rectChildren[i], 0, startOffset.x + (spacing.x + size.x) * positionX);
+                SetChildAlongAxis(rectChildren[i], 1, startOffset.y + (spacing.y + size.y) * positionY);
             }
         }
     }

@@ -70,6 +70,7 @@ namespace UnityEngine.UI
 
             float currentX = 0f;
             float currentY = 0f;
+            float maxRowHeight = 0f;
 
             int x = 0, y = 0;
             int count = rectChildren.Count;
@@ -79,21 +80,26 @@ namespace UnityEngine.UI
                 float childWidth = child.rect.width;
                 float childHeight = child.rect.height;
 
-                if (currentX + childWidth > availableWidth)
+                if (currentX > 0f && currentX + childWidth > availableWidth)
                 {
-                    currentY += totalHeight + spacing.y;
+                    currentY += maxRowHeight + spacing.y;
                     currentX = 0f;
-
-                    x = 0; y++;
+                    maxRowHeight = 0f;
+                    x = 0;
+                    y++;
                 }
 
-                totalWidth = Mathf.Max(childWidth, currentX - spacing.x);
-                totalHeight = Mathf.Max(childHeight, currentY - spacing.y);
-                actualRowCount = Mathf.Max(actualRowCount, y + 1);
-                actualColumnCount = Mathf.Max(actualColumnCount, x + 1);
                 cellDataList.Add(new CellData(x, y));
 
                 currentX += childWidth + spacing.x;
+                maxRowHeight = Mathf.Max(maxRowHeight, childHeight);
+
+                totalWidth = Mathf.Max(totalWidth, currentX - spacing.x);
+                totalHeight = currentY + maxRowHeight;
+
+                actualRowCount = Mathf.Max(actualRowCount, y + 1);
+                actualColumnCount = Mathf.Max(actualColumnCount, x + 1);
+
                 x++;
             }
         }
@@ -113,8 +119,8 @@ namespace UnityEngine.UI
                 return;
             }
 
-            float width = rectTransform.rect.width;
-            float height = rectTransform.rect.height;
+            float startX = GetStartOffset(0, totalWidth);
+            float startY = GetStartOffset(1, totalHeight);
 
             for (int i = 0; i < count; i++)
             {
@@ -131,8 +137,8 @@ namespace UnityEngine.UI
 
                 Vector2 size = child.rect.size;
 
-                SetChildAlongAxis(rectChildren[i], 0, startOffset.x + (spacing.x + size.x) * positionX);
-                SetChildAlongAxis(rectChildren[i], 1, startOffset.y + (spacing.y + size.y) * positionY);
+                SetChildAlongAxis(rectChildren[i], 0, startX + (spacing.x + size.x) * positionX);
+                SetChildAlongAxis(rectChildren[i], 1, startY + (spacing.y + size.y) * positionY);
             }
         }
     }

@@ -26,18 +26,19 @@ namespace UnityEngine.UI
         private List<CellData> cellDataList = new List<CellData>();
         float totalWidth;
         float totalHeight;
-        int actualRowCount;
 
         public override void CalculateLayoutInputHorizontal()
         {
             base.CalculateLayoutInputHorizontal();
             CalcLayout();
-            SetLayoutInputForAxis(totalWidth, totalWidth, -1, 0);
+            float width = totalWidth + padding.horizontal;
+            SetLayoutInputForAxis(width, width, -1, 0);
         }
 
         public override void CalculateLayoutInputVertical()
         {
-            SetLayoutInputForAxis(totalHeight, totalHeight, -1, 1);
+            float height = totalHeight + padding.vertical;
+            SetLayoutInputForAxis(height, height, -1, 1);
         }
 
         public override void SetLayoutHorizontal()
@@ -54,7 +55,6 @@ namespace UnityEngine.UI
         {
             cellDataList.Clear();
 
-            actualRowCount = 1;
             totalWidth = 0f;
             totalHeight = 0f;
 
@@ -63,8 +63,6 @@ namespace UnityEngine.UI
 
             float currentX = 0f;
             float currentY = 0f;
-            float rowWidth = 0f;
-            float rowHeight = 0f;
 
             int count = rectChildren.Count;
             for (int i = 0; i < count; i++)
@@ -75,20 +73,16 @@ namespace UnityEngine.UI
 
                 if (currentX + childWidth > availableWidth)
                 {
-                    actualRowCount++;
-                    currentY += rowHeight + spacing.y;
+                    currentY += totalHeight + spacing.y;
                     currentX = 0f;
                 }
 
                 currentX += childWidth + spacing.x;
-                rowWidth = Mathf.Max(childWidth, currentX - spacing.x);
-                rowHeight = Mathf.Max(childHeight, currentY - spacing.y);
+                totalWidth = Mathf.Max(childWidth, currentX - spacing.x);
+                totalHeight = Mathf.Max(childHeight, currentY - spacing.y);
 
                 cellDataList.Add(new CellData());
             }
-
-            totalWidth = rowWidth + padding.horizontal;
-            totalHeight = rowHeight + padding.vertical;
         }
 
         private void SetCellsAlongAxis(int axis)
@@ -116,6 +110,7 @@ namespace UnityEngine.UI
 
                 float startX = GetStartOffset(0, totalWidth);
                 float startY = GetStartOffset(1, totalHeight);
+
                 float posX = startX + childWidth / 2f;
                 float posY = startY;
 

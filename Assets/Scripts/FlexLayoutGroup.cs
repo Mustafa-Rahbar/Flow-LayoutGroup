@@ -21,11 +21,15 @@ namespace UnityEngine.UI
         {
             public int x;
             public int y;
+            public Vector2 size;
+            public Vector2 offset;
 
-            public CellData(int X, int Y)
+            public CellData(int X, int Y, Vector2 _size, Vector2 _offset)
             {
                 x = X;
                 y = Y;
+                size = _size;
+                offset = _offset;
             }
         }
 
@@ -45,7 +49,6 @@ namespace UnityEngine.UI
 
         private List<CellData> m_CellDataList = new List<CellData>();
         private List<RowData> m_RowDataList = new List<RowData>();
-        private List<RowData> m_ColumnDataList = new List<RowData>();
 
         private float maxWidth;
         private float maxHeight;
@@ -78,7 +81,6 @@ namespace UnityEngine.UI
         {
             m_CellDataList.Clear();
             m_RowDataList.Clear();
-            m_ColumnDataList.Clear();
             maxWidth = maxHeight = 0f;
 
             float width = rectTransform.rect.width;
@@ -91,18 +93,17 @@ namespace UnityEngine.UI
             float rowTotalWidth = 0f;
             int rowItemCount = 0;
 
-
             int x = 0, y = 0;
             int count = rectChildren.Count;
             for (int i = 0; i < count; i++)
             {
                 RectTransform child = rectChildren[i];
-                float childWidth = child.rect.width;
-                float childHeight = child.rect.height;
+                Vector2 size = child.rect.size;
 
-                if (rowItemCount > 0 && currentX + childWidth > availableWidth)
+                float nextX = currentX + (rowItemCount > 0 ? spacing.x : 0f) + size.x;
+                if (rowItemCount > 0 && nextX > availableWidth)
                 {
-                    m_RowDataList.Add(new RowData(rowTotalWidth - spacing.x, rowMaxHeight, rowItemCount));
+                    m_RowDataList.Add(new RowData(rowTotalWidth, rowMaxHeight, rowItemCount));
 
                     currentY += rowMaxHeight + spacing.y;
                     currentX = 0f;
@@ -114,22 +115,24 @@ namespace UnityEngine.UI
                     y++;
                 }
 
-                currentX += childWidth + spacing.x;
-                rowTotalWidth += childWidth + spacing.x;
-                rowMaxHeight = Mathf.Max(rowMaxHeight, childHeight);
+                Vector2 offset = new Vector2(currentX, currentY);
+                m_CellDataList.Add(new CellData(x, y, size, offset));
+
+                currentX += (rowItemCount > 0 ? spacing.x : 0f) + size.x;
+                rowTotalWidth = currentX;
+                rowMaxHeight = Mathf.Max(rowMaxHeight, size.y);
                 rowItemCount++;
 
-                maxWidth = Mathf.Max(maxWidth, rowTotalWidth - spacing.x);
+                maxWidth = Mathf.Max(maxWidth, rowTotalWidth);
                 maxHeight = Mathf.Max(maxHeight, currentY + rowMaxHeight);
-                m_CellDataList.Add(new CellData(x, y));
 
                 x++;
             }
 
-            // add last row if not added
+            // Add last row
             if (rowItemCount > 0)
             {
-                m_RowDataList.Add(new RowData(rowTotalWidth - spacing.x, rowMaxHeight, rowItemCount));
+                m_RowDataList.Add(new RowData(currentX, rowMaxHeight, rowItemCount));
             }
         }
 
@@ -151,7 +154,8 @@ namespace UnityEngine.UI
             float startX = 0f;
             float startY = GetStartOffset(1, maxHeight);
 
-            int lastVisualRow = -1;
+            int lastRow = -1;
+            float currentX = 0f;
             for (int i = 0; i < count; i++)
             {
                 CellData cell = m_CellDataList[i];
@@ -161,20 +165,21 @@ namespace UnityEngine.UI
 
                 RowData row = m_RowDataList[positionY];
 
-                if ((int)startCorner % 2 == 1)
-                    positionX = row.itemCount - 1 - positionX;
+                if (lastRow != positionY)
+                {
+                    lastRow = positionY;
+                    startX = GetStartOffset(0, row.width);
+                    currentX = ((int)startCorner % 2 == 1) ? row.width : 0f;
+                }
+
+                if ((int)startCorner % 2 == 1) currentX -= cell.size.x;
                 if ((int)startCorner / 2 == 1)
                     positionY = m_RowDataList.Count - 1 - positionY;
 
-                if (lastVisualRow != positionY)
-                {
-                    lastVisualRow = positionY;
-                    startX = GetStartOffset(0, row.width);
-                }
+                SetChildAlongAxis(rectChildren[i], 0, startX + currentX);
+                SetChildAlongAxis(rectChildren[i], 1, startY + (cell.size.y + spacing.y) * positionY);
 
-                Vector2 size = rectChildren[i].rect.size;
-                SetChildAlongAxis(rectChildren[i], 0, startX + (spacing.x + size.x) * positionX);
-                SetChildAlongAxis(rectChildren[i], 1, startY + (spacing.y + size.y) * positionY);
+                currentX += ((int)startCorner % 2 == 1) ? spacing.x * -1 : cell.size.x + spacing.x;
             }
         }
     }

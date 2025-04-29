@@ -187,10 +187,11 @@ namespace UnityEngine.UI
             for (int i = 0; i < count; i++)
             {
                 RectTransform child = rectChildren[i];
+                CellData cell = m_CellDataList[i];
+
                 GetChildSizes(child, 0, !isVertical && m_ChildControlWidth, false, out var xMin, out var xPreferred, out var xFlexible);
                 GetChildSizes(child, 1, isVertical && m_ChildControlHeight, false, out var yMin, out var yPreferred, out var yFlexible);
 
-                CellData cell = m_CellDataList[i];
                 int posX = cell.x;
                 int posY = cell.y;
 
@@ -200,7 +201,7 @@ namespace UnityEngine.UI
                 if (lastRowIndex != rowIndex)
                 {
                     lastRowIndex = rowIndex;
-                    currentCrossPos = (reverseCross ? row.width : 0f);
+                    currentCrossPos = reverseCross ? row.width : 0f;
                 }
 
                 if (isVertical)

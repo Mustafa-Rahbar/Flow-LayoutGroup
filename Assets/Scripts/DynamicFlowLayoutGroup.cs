@@ -2,7 +2,7 @@ using System.Collections.Generic;
 
 namespace UnityEngine.UI
 {
-    public class WrapLayoutGroup : LayoutGroup
+    public class DynamicFlowLayoutGroup : LayoutGroup
     {
         public enum Corner { UpperLeft, UpperRight, LowerLeft, LowerRight }
         public enum Axis { Horizontal, Vertical }
@@ -54,13 +54,14 @@ namespace UnityEngine.UI
         public override void CalculateLayoutInputHorizontal()
         {
             base.CalculateLayoutInputHorizontal();
-            CalcLayout(m_StartAxis == Axis.Vertical);
+            CalcLayout();
             float width = maxWidth + padding.horizontal;
             SetLayoutInputForAxis(width, width, -1, 0);
         }
 
         public override void CalculateLayoutInputVertical()
         {
+            CalcLayout();
             float height = maxHeight + padding.vertical;
             SetLayoutInputForAxis(height, height, -1, 1);
         }
@@ -75,11 +76,13 @@ namespace UnityEngine.UI
             SetCellsAlongAxis(1);
         }
 
-        private void CalcLayout(bool isVertical)
+        private void CalcLayout()
         {
             m_CellDataList.Clear();
             m_RowDataList.Clear();
             maxWidth = maxHeight = 0f;
+
+            bool isVertical = m_StartAxis == Axis.Vertical;
 
             float width = rectTransform.rect.width;
             float height = rectTransform.rect.height;
@@ -100,11 +103,11 @@ namespace UnityEngine.UI
             {
                 RectTransform child = rectChildren[i];
 
-                float childWidth = GetChildSize(child, 0, !isVertical && m_ChildControlWidth);
-                float childHeight = GetChildSize(child, 1, isVertical && m_ChildControlHeight);
+                GetChildSizes(child, 0, !isVertical && m_ChildControlWidth, false, out var xMin, out var xPreferred, out var xFlexible);
+                GetChildSizes(child, 1, isVertical && m_ChildControlHeight, false, out var yMin, out var yPreferred, out var yFlexible);
 
-                float mainSize = isVertical ? childHeight : childWidth;
-                float crossSize = isVertical ? childWidth : childHeight;
+                float mainSize = isVertical ? yPreferred : xPreferred;
+                float crossSize = isVertical ? xPreferred : yPreferred;
                 float availableMain = isVertical ? availableHeight : availableWidth;
                 float spacingMain = isVertical ? spacing.y : spacing.x;
                 float spacingCross = isVertical ? spacing.x : spacing.y;
@@ -158,15 +161,14 @@ namespace UnityEngine.UI
             {
                 for (int i = 0; i < count; i++)
                 {
-                    RectTransform child = rectChildren[i];
-                    child.anchorMin = Vector2.up;
-                    child.anchorMax = Vector2.up;
-
-                    child.sizeDelta = m_StartAxis switch
+                    RectTransform rectTransform = rectChildren[i];
+                    m_Tracker.Add(this, rectTransform, DrivenTransformProperties.Anchors | DrivenTransformProperties.AnchoredPosition);
+                    rectTransform.anchorMin = Vector2.up;
+                    rectTransform.anchorMax = Vector2.up;
+                    rectTransform.sizeDelta = m_StartAxis switch
                     {
-                        Axis.Horizontal => new Vector2(child.sizeDelta.x, cellSize.y),
-                        Axis.Vertical => new Vector2(cellSize.x, child.sizeDelta.y),
-                        _ => child.sizeDelta
+                        Axis.Horizontal => new Vector2(rectTransform.sizeDelta.x, cellSize.y),
+                        _ => new Vector2(cellSize.x, rectTransform.sizeDelta.y),
                     };
                 }
                 return;
@@ -185,8 +187,8 @@ namespace UnityEngine.UI
             for (int i = 0; i < count; i++)
             {
                 RectTransform child = rectChildren[i];
-                float childWidth = GetChildSize(child, 0, !isVertical && m_ChildControlWidth);
-                float childHeight = GetChildSize(child, 1, isVertical && m_ChildControlHeight);
+                GetChildSizes(child, 0, !isVertical && m_ChildControlWidth, false, out var xMin, out var xPreferred, out var xFlexible);
+                GetChildSizes(child, 1, isVertical && m_ChildControlHeight, false, out var yMin, out var yPreferred, out var yFlexible);
 
                 CellData cell = m_CellDataList[i];
                 int posX = cell.x;
@@ -203,42 +205,54 @@ namespace UnityEngine.UI
 
                 if (isVertical)
                 {
-                    if (reverseCross) currentCrossPos -= childHeight;
+                    if (reverseCross) currentCrossPos -= yPreferred;
 
-                    float posXFinal = mainStartOffset + (childWidth + spacing.x) * (reverseMain ? (m_RowDataList.Count - 1 - posX) : posX);
+                    float posXFinal = mainStartOffset + (xPreferred + spacing.x) * (reverseMain ? (m_RowDataList.Count - 1 - posX) : posX);
                     float posYFinal = crossStartOffset + (reverseCross ? currentCrossPos : currentCrossPos);
 
-                    SetChildAlongAxisWithScale(child, 0, posXFinal, childWidth, child.localScale.x);
+                    SetChildAlongAxisWithScale(child, 0, posXFinal, xPreferred, child.localScale.x);
 
-                    if (m_ChildControlHeight) SetChildAlongAxisWithScale(child, 1, posYFinal, childHeight, child.localScale.y);
+                    if (m_ChildControlHeight) SetChildAlongAxisWithScale(child, 1, posYFinal, yPreferred, child.localScale.y);
                     else SetChildAlongAxisWithScale(child, 1, posYFinal, child.localScale.y);
 
-                    currentCrossPos += (reverseCross ? -(spacing.y) : (childHeight + spacing.y));
+                    currentCrossPos += (reverseCross ? -(spacing.y) : (yPreferred + spacing.y));
                 }
                 else // Horizontal
                 {
-                    if (reverseCross) currentCrossPos -= childWidth;
+                    if (reverseCross) currentCrossPos -= xPreferred;
 
                     float posXFinal = crossStartOffset + (reverseCross ? currentCrossPos : currentCrossPos);
-                    float posYFinal = mainStartOffset + (childHeight + spacing.y) * (reverseMain ? (m_RowDataList.Count - 1 - posY) : posY);
+                    float posYFinal = mainStartOffset + (yPreferred + spacing.y) * (reverseMain ? (m_RowDataList.Count - 1 - posY) : posY);
 
-                    if (m_ChildControlWidth) SetChildAlongAxisWithScale(child, 0, posXFinal, childWidth, child.localScale.x);
+                    if (m_ChildControlWidth) SetChildAlongAxisWithScale(child, 0, posXFinal, xPreferred, child.localScale.x);
                     else SetChildAlongAxisWithScale(child, 0, posXFinal, child.localScale.x);
 
-                    SetChildAlongAxisWithScale(child, 1, posYFinal, childHeight, child.localScale.y);
+                    SetChildAlongAxisWithScale(child, 1, posYFinal, yPreferred, child.localScale.y);
 
-                    currentCrossPos += (reverseCross ? -(spacing.x) : (childWidth + spacing.x));
+                    currentCrossPos += (reverseCross ? -(spacing.x) : (xPreferred + spacing.x));
                 }
             }
         }
 
-        private float GetChildSize(RectTransform child, int axis, bool controlSize)
+        private void GetChildSizes(RectTransform child, int axis, bool controlSize, bool childForceExpand, out float min, out float preferred, out float flexible)
         {
-            return (controlSize) switch
+            if (!controlSize)
             {
-                true => LayoutUtility.GetPreferredSize(child, axis),
-                _ => child.sizeDelta[axis],
-            };
+                min = child.sizeDelta[axis];
+                preferred = min;
+                flexible = 0f;
+            }
+            else
+            {
+                min = LayoutUtility.GetMinSize(child, axis);
+                preferred = LayoutUtility.GetPreferredSize(child, axis);
+                flexible = LayoutUtility.GetFlexibleSize(child, axis);
+            }
+
+            if (childForceExpand)
+            {
+                flexible = Mathf.Max(flexible, 1f);
+            }
         }
     }
 }

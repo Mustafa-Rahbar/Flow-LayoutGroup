@@ -171,10 +171,11 @@ namespace UnityEngine.UI
             float startOffsetX = 0f;
             float startOffsetY = 0f;
 
-            int num = reverseX ? count - 1 : 0;
-            int num2 = reverseX ? 0 : count;
-            int num3 = reverseX ? -1 : 1;
-            for (int i = num; reverseX ? i >= num2 : i < num2; i += num3)
+            bool num = isVertical ? reverseY : reverseX;
+            int num2 = num ? count - 1 : 0;
+            int num3 = num ? 0 : count;
+            int num4 = num ? -1 : 1;
+            for (int i = num2; num ? i >= num3 : i < num3; i += num4)
             {
                 RectTransform child = rectChildren[i];
                 CellData cell = m_CellDataList[i];
@@ -195,11 +196,11 @@ namespace UnityEngine.UI
                         lastRowIndex = rowIndex;
                         float rowHeight = row.height;
                         startOffsetX = GetStartOffset(0, maxWidth);
-                        startOffsetY = GetStartOffset(1, row.width) + (reverseX ? GetReverseOffset(maxHeight - rowHeight) : 0f);
+                        startOffsetY = GetStartOffset(1, rowHeight);
                         currentPos = 0;
                     }
 
-                    float posXFinal = startOffsetX + (xPreferred + spacing.x) * (reverseY ? (m_RowDataList.Count - 1 - positionX) : positionX);
+                    float posXFinal = startOffsetX + (xPreferred + spacing.x) * (reverseX ? (m_RowDataList.Count - 1 - positionX) : positionX);
                     float posYFinal = startOffsetY + currentPos;
 
                     SetChildAlongAxisWithScale(child, 0, posXFinal, xPreferred, child.localScale.x);
@@ -215,7 +216,7 @@ namespace UnityEngine.UI
                     {
                         lastRowIndex = rowIndex;
                         float rowWidth = row.width;
-                        startOffsetX = GetStartOffset(0, rowWidth) + (reverseX ? GetReverseOffset(maxWidth - rowWidth) : 0);
+                        startOffsetX = GetStartOffset(0, rowWidth);
                         startOffsetY = GetStartOffset(1, maxHeight);
                         currentPos = 0;
                     }
@@ -231,16 +232,6 @@ namespace UnityEngine.UI
                     currentPos += xPreferred + spacing.x;
                 }
             }
-        }
-
-        private float GetReverseOffset(float requiredSpaceWithoutPadding)
-        {
-            return requiredSpaceWithoutPadding * m_ChildAlignment switch
-            {
-                TextAnchor.UpperLeft or TextAnchor.MiddleLeft or TextAnchor.LowerLeft => 1,
-                TextAnchor.UpperRight or TextAnchor.MiddleRight or TextAnchor.LowerRight => -1,
-                _ => 0,
-            };
         }
 
         private void GetChildSizes(RectTransform child, int axis, bool controlSize, bool childForceExpand, out float min, out float preferred, out float flexible)

@@ -48,21 +48,18 @@ namespace UnityEngine.UI
         private List<CellData> m_CellDataList = new List<CellData>();
         private List<RowData> m_RowDataList = new List<RowData>();
 
-        private float maxWidth;
-        private float maxHeight;
-
         public override void CalculateLayoutInputHorizontal()
         {
             base.CalculateLayoutInputHorizontal();
             CalculateLayoutInput((int)m_StartAxis);
-            float width = maxWidth + padding.horizontal;
+            float width = preferredWidth + padding.horizontal;
             SetLayoutInputForAxis(width, width, -1, 0);
         }
 
         public override void CalculateLayoutInputVertical()
         {
             CalculateLayoutInput((int)m_StartAxis);
-            float height = maxHeight + padding.vertical;
+            float height = preferredHeight + padding.vertical;
             SetLayoutInputForAxis(height, height, -1, 1);
         }
 
@@ -80,12 +77,12 @@ namespace UnityEngine.UI
         {
             m_CellDataList.Clear();
             m_RowDataList.Clear();
-            maxWidth = maxHeight = 0f;
 
             float size = rectTransform.rect.size[axis];
             float availableSize = size - (axis == 1 ? padding.vertical : padding.horizontal);
 
             int itemCount = 0;
+            Vector2 maxSize = Vector2.zero;
             Vector2 totalPreferred = Vector2.zero;
             Vector2Int row = Vector2Int.zero;
 
@@ -105,11 +102,9 @@ namespace UnityEngine.UI
                 if (itemCount > 0 && maxPosition > availableSize)
                 {
                     m_RowDataList.Add(new RowData(totalPreferred[0], totalPreferred[1], itemCount));
-                    (maxWidth, maxHeight) = axis switch
-                    {
-                        0 => (Mathf.Max(maxWidth, totalPreferred[0]), maxHeight + totalPreferred[1] + spacing[1]),
-                        _ => (maxWidth + totalPreferred[0] + spacing[0], Mathf.Max(maxHeight, totalPreferred[1]))
-                    };
+
+                    maxSize[axis] = Mathf.Max(maxSize[axis], totalPreferred[axis]);
+                    maxSize[1 - axis] += totalPreferred[1 - axis] + spacing[1 - axis];
 
                     // Reset for new row
                     row[axis] = 0;
@@ -134,11 +129,12 @@ namespace UnityEngine.UI
             if (itemCount > 0)
             {
                 m_RowDataList.Add(new RowData(totalPreferred[0], totalPreferred[1], itemCount));
-                (maxWidth, maxHeight) = axis switch
-                {
-                    0 => (Mathf.Max(maxWidth, totalPreferred[0]), maxHeight + totalPreferred[1]),
-                    _ => (maxWidth + totalPreferred[0], Mathf.Max(maxHeight, totalPreferred[1]))
-                };
+
+                maxSize[axis] = Mathf.Max(maxSize[axis], totalPreferred[axis]);
+                maxSize[1 - axis] += totalPreferred[1 - axis];
+
+                SetLayoutInputForAxis(maxSize[0], maxSize[0], -1, 0);
+                SetLayoutInputForAxis(maxSize[1], maxSize[1], -1, 1);
             }
         }
 
@@ -195,7 +191,7 @@ namespace UnityEngine.UI
                     {
                         lastRowIndex = rowIndex;
                         float rowHeight = row.height;
-                        startOffsetX = GetStartOffset(0, maxWidth);
+                        startOffsetX = GetStartOffset(0, preferredWidth);
                         startOffsetY = GetStartOffset(1, rowHeight);
                         currentPos = 0;
                     }
@@ -217,7 +213,7 @@ namespace UnityEngine.UI
                         lastRowIndex = rowIndex;
                         float rowWidth = row.width;
                         startOffsetX = GetStartOffset(0, rowWidth);
-                        startOffsetY = GetStartOffset(1, maxHeight);
+                        startOffsetY = GetStartOffset(1, preferredHeight);
                         currentPos = 0;
                     }
 

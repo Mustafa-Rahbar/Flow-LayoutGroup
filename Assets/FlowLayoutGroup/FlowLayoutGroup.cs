@@ -2,7 +2,7 @@ using System.Collections.Generic;
 
 namespace UnityEngine.UI
 {
-    public class DynamicFlowLayoutGroup : LayoutGroup
+    public class FlowLayoutGroup : LayoutGroup
     {
         public enum Corner { UpperLeft, UpperRight, LowerLeft, LowerRight }
         public enum Axis { Horizontal, Vertical }
@@ -54,14 +54,14 @@ namespace UnityEngine.UI
         public override void CalculateLayoutInputHorizontal()
         {
             base.CalculateLayoutInputHorizontal();
-            CalcLayout();
+            CalculateLayoutInput((int)m_StartAxis);
             float width = maxWidth + padding.horizontal;
             SetLayoutInputForAxis(width, width, -1, 0);
         }
 
         public override void CalculateLayoutInputVertical()
         {
-            CalcLayout();
+            CalculateLayoutInput((int)m_StartAxis);
             float height = maxHeight + padding.vertical;
             SetLayoutInputForAxis(height, height, -1, 1);
         }
@@ -76,81 +76,69 @@ namespace UnityEngine.UI
             SetCellsAlongAxis(1);
         }
 
-        private void CalcLayout()
+        private void CalculateLayoutInput(int axis)
         {
             m_CellDataList.Clear();
             m_RowDataList.Clear();
             maxWidth = maxHeight = 0f;
 
-            bool isVertical = m_StartAxis == Axis.Vertical;
+            float size = rectTransform.rect.size[axis];
+            float availableSize = size - (axis == 1 ? padding.vertical : padding.horizontal);
 
-            float width = rectTransform.rect.width;
-            float height = rectTransform.rect.height;
-            float availableWidth = width - padding.horizontal;
-            float availableHeight = height - padding.vertical;
+            int itemCount = 0;
+            Vector2 totalPreferred = Vector2.zero;
+            Vector2Int row = Vector2Int.zero;
 
-            float currentMain = 0f; // X for Horizontal, Y for Vertical
-            float currentCross = 0f; // Y for Horizontal, X for Vertical
-
-            float rowMaxCross = 0f;
-            float rowTotalMain = 0f;
-            int rowItemCount = 0;
-
-            int x = 0, y = 0;
             int count = rectChildren.Count;
-
             for (int i = 0; i < count; i++)
             {
                 RectTransform child = rectChildren[i];
+                GetChildSizes(child, 0, m_ChildControlWidth, false, out var xMin, out var xPreferred, out var xFlexible);
+                GetChildSizes(child, 1, m_ChildControlHeight, false, out var yMin, out var yPreferred, out var yFlexible);
+                Vector2 cellSize = new Vector2(xPreferred, yPreferred);
 
-                GetChildSizes(child, 0, !isVertical && m_ChildControlWidth, false, out var xMin, out var xPreferred, out var xFlexible);
-                GetChildSizes(child, 1, isVertical && m_ChildControlHeight, false, out var yMin, out var yPreferred, out var yFlexible);
+                // Handle the spacing properly for the first item in the row
+                float space = (itemCount > 0 ? spacing[axis] : 0f);  // No space before the first item
+                float maxPosition = totalPreferred[axis] + space + cellSize[axis];
 
-                float mainSize = isVertical ? yPreferred : xPreferred;
-                float crossSize = isVertical ? xPreferred : yPreferred;
-                float availableMain = isVertical ? availableHeight : availableWidth;
-                float spacingMain = isVertical ? spacing.y : spacing.x;
-                float spacingCross = isVertical ? spacing.x : spacing.y;
-
-                float nextMain = currentMain + (rowItemCount > 0 ? spacingMain : 0f) + mainSize;
-                if (rowItemCount > 0 && nextMain > availableMain)
+                // Check if wrapping to a new row is needed
+                if (itemCount > 0 && maxPosition > availableSize)
                 {
-                    m_RowDataList.Add(new RowData(rowTotalMain, rowMaxCross, rowItemCount));
-
-                    currentCross += rowMaxCross + spacingCross;
-                    currentMain = 0f;
-                    rowMaxCross = 0f;
-                    rowTotalMain = 0f;
-                    rowItemCount = 0;
-
-                    if (isVertical)
+                    m_RowDataList.Add(new RowData(totalPreferred[0], totalPreferred[1], itemCount));
+                    (maxWidth, maxHeight) = axis switch
                     {
-                        y = 0;
-                        x++;
-                    }
-                    else
-                    {
-                        x = 0;
-                        y++;
-                    }
+                        0 => (Mathf.Max(maxWidth, totalPreferred[0]), maxHeight + totalPreferred[1] + spacing[1]),
+                        _ => (maxWidth + totalPreferred[0] + spacing[0], Mathf.Max(maxHeight, totalPreferred[1]))
+                    };
+
+                    // Reset for new row
+                    row[axis] = 0;
+                    row[1 - axis]++;
+                    totalPreferred[axis] = 0f;
+                    totalPreferred[1 - axis] = 0f;
+                    itemCount = 0;
+                    space = 0f; // Reset spacing for the first item of the new row
                 }
 
-                m_CellDataList.Add(new CellData(x, y));
+                // Add the current item to the row data
+                m_CellDataList.Add(new CellData(row[0], row[1]));
 
-                currentMain += (rowItemCount > 0 ? spacingMain : 0f) + mainSize;
-                rowTotalMain = currentMain;
-                rowMaxCross = Mathf.Max(rowMaxCross, crossSize);
-                rowItemCount++;
-
-                if (isVertical) y++; else x++;
-
-                maxWidth = Mathf.Max(maxWidth, isVertical ? currentCross + rowMaxCross : rowTotalMain);
-                maxHeight = Mathf.Max(maxHeight, isVertical ? rowTotalMain : currentCross + rowMaxCross);
+                // Update the total preferred size
+                totalPreferred[axis] += space + cellSize[axis];
+                totalPreferred[1 - axis] = Mathf.Max(totalPreferred[1 - axis], cellSize[1 - axis]);
+                itemCount++;
+                row[axis]++;
             }
 
-            if (rowItemCount > 0)
+            // Final row (in case it ended without wrap)
+            if (itemCount > 0)
             {
-                m_RowDataList.Add(new RowData(currentMain, rowMaxCross, rowItemCount));
+                m_RowDataList.Add(new RowData(totalPreferred[0], totalPreferred[1], itemCount));
+                (maxWidth, maxHeight) = axis switch
+                {
+                    0 => (Mathf.Max(maxWidth, totalPreferred[0]), maxHeight + totalPreferred[1]),
+                    _ => (maxWidth + totalPreferred[0], Mathf.Max(maxHeight, totalPreferred[1]))
+                };
             }
         }
 
@@ -175,16 +163,18 @@ namespace UnityEngine.UI
             }
 
             bool isVertical = m_StartAxis == Axis.Vertical;
-            bool reverseCross = (startCorner is Corner.UpperRight or Corner.LowerRight); // right side
-            bool reverseMain = (startCorner is Corner.LowerLeft or Corner.LowerRight);   // bottom side
-
-            float crossStartOffset = GetStartOffset(isVertical ? 1 : 0, isVertical ? maxHeight : maxWidth);
-            float mainStartOffset = GetStartOffset(isVertical ? 0 : 1, isVertical ? maxWidth : maxHeight);
+            bool reverseX = ((int)startCorner % 2) == 1;
+            bool reverseY = ((int)startCorner / 2) == 1;
 
             int lastRowIndex = -1;
-            float currentCrossPos = 0f;
+            float currentPos = 0f;
+            float startOffsetX = 0f;
+            float startOffsetY = 0f;
 
-            for (int i = 0; i < count; i++)
+            int num = reverseX ? count - 1 : 0;
+            int num2 = reverseX ? 0 : count;
+            int num3 = reverseX ? -1 : 1;
+            for (int i = num; reverseX ? i >= num2 : i < num2; i += num3)
             {
                 RectTransform child = rectChildren[i];
                 CellData cell = m_CellDataList[i];
@@ -192,47 +182,65 @@ namespace UnityEngine.UI
                 GetChildSizes(child, 0, !isVertical && m_ChildControlWidth, false, out var xMin, out var xPreferred, out var xFlexible);
                 GetChildSizes(child, 1, isVertical && m_ChildControlHeight, false, out var yMin, out var yPreferred, out var yFlexible);
 
-                int posX = cell.x;
-                int posY = cell.y;
+                int positionX = cell.x;
+                int positionY = cell.y;
 
-                int rowIndex = isVertical ? posX : posY;
+                int rowIndex = isVertical ? positionX : positionY;
                 RowData row = m_RowDataList[rowIndex];
-
-                if (lastRowIndex != rowIndex)
-                {
-                    lastRowIndex = rowIndex;
-                    currentCrossPos = reverseCross ? row.width : 0f;
-                }
 
                 if (isVertical)
                 {
-                    if (reverseCross) currentCrossPos -= yPreferred;
+                    if (lastRowIndex != rowIndex)
+                    {
+                        lastRowIndex = rowIndex;
+                        float rowHeight = row.height;
+                        startOffsetX = GetStartOffset(0, maxWidth);
+                        startOffsetY = GetStartOffset(1, row.width) + (reverseX ? GetReverseOffset(maxHeight - rowHeight) : 0f);
+                        currentPos = 0;
+                    }
 
-                    float posXFinal = mainStartOffset + (xPreferred + spacing.x) * (reverseMain ? (m_RowDataList.Count - 1 - posX) : posX);
-                    float posYFinal = crossStartOffset + (reverseCross ? currentCrossPos : currentCrossPos);
+                    float posXFinal = startOffsetX + (xPreferred + spacing.x) * (reverseY ? (m_RowDataList.Count - 1 - positionX) : positionX);
+                    float posYFinal = startOffsetY + currentPos;
 
                     SetChildAlongAxisWithScale(child, 0, posXFinal, xPreferred, child.localScale.x);
 
                     if (m_ChildControlHeight) SetChildAlongAxisWithScale(child, 1, posYFinal, yPreferred, child.localScale.y);
                     else SetChildAlongAxisWithScale(child, 1, posYFinal, child.localScale.y);
 
-                    currentCrossPos += (reverseCross ? -(spacing.y) : (yPreferred + spacing.y));
+                    currentPos += yPreferred + spacing.y;
                 }
                 else // Horizontal
                 {
-                    if (reverseCross) currentCrossPos -= xPreferred;
+                    if (lastRowIndex != rowIndex)
+                    {
+                        lastRowIndex = rowIndex;
+                        float rowWidth = row.width;
+                        startOffsetX = GetStartOffset(0, rowWidth) + (reverseX ? GetReverseOffset(maxWidth - rowWidth) : 0);
+                        startOffsetY = GetStartOffset(1, maxHeight);
+                        currentPos = 0;
+                    }
 
-                    float posXFinal = crossStartOffset + (reverseCross ? currentCrossPos : currentCrossPos);
-                    float posYFinal = mainStartOffset + (yPreferred + spacing.y) * (reverseMain ? (m_RowDataList.Count - 1 - posY) : posY);
+                    float posXFinal = startOffsetX + currentPos;
+                    float posYFinal = startOffsetY + (yPreferred + spacing.y) * (reverseY ? (m_RowDataList.Count - 1 - positionY) : positionY);
 
                     if (m_ChildControlWidth) SetChildAlongAxisWithScale(child, 0, posXFinal, xPreferred, child.localScale.x);
                     else SetChildAlongAxisWithScale(child, 0, posXFinal, child.localScale.x);
 
                     SetChildAlongAxisWithScale(child, 1, posYFinal, yPreferred, child.localScale.y);
 
-                    currentCrossPos += (reverseCross ? -(spacing.x) : (xPreferred + spacing.x));
+                    currentPos += xPreferred + spacing.x;
                 }
             }
+        }
+
+        private float GetReverseOffset(float requiredSpaceWithoutPadding)
+        {
+            return requiredSpaceWithoutPadding * m_ChildAlignment switch
+            {
+                TextAnchor.UpperLeft or TextAnchor.MiddleLeft or TextAnchor.LowerLeft => 1,
+                TextAnchor.UpperRight or TextAnchor.MiddleRight or TextAnchor.LowerRight => -1,
+                _ => 0,
+            };
         }
 
         private void GetChildSizes(RectTransform child, int axis, bool controlSize, bool childForceExpand, out float min, out float preferred, out float flexible)

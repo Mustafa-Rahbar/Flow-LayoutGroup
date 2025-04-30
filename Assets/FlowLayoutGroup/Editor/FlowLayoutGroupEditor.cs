@@ -3,9 +3,9 @@ using UnityEngine.UI;
 
 namespace UnityEditor.UI
 {
-    [CustomEditor(typeof(DynamicFlowLayoutGroup), true)]
+    [CustomEditor(typeof(FlowLayoutGroup), true)]
     [CanEditMultipleObjects]
-    public class DynamicFlowLayoutGroupEditor : Editor
+    public class FlowLayoutGroupEditor : Editor
     {
         private SerializedProperty m_Padding;
         private SerializedProperty m_ChildAlignment;

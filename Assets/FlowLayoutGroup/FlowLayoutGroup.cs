@@ -1,9 +1,9 @@
 using System.Collections.Generic;
 
-namespace UnityEngine.UI
-{
-    public class FlowLayoutGroup : LayoutGroup
-    {
+namespace UnityEngine.UI {
+
+    public class FlowLayoutGroup : LayoutGroup {
+
         public enum Corner { UpperLeft, UpperRight, LowerLeft, LowerRight }
         public enum Axis { Horizontal, Vertical }
 
@@ -19,26 +19,22 @@ namespace UnityEngine.UI
         public Vector2 cellSize { get => m_CellSize; set => SetProperty(ref m_CellSize, value); }
         public Vector2 spacing { get => m_Spacing; set => SetProperty(ref m_Spacing, value); }
 
-        private struct CellData
-        {
+        private struct CellData {
             public int x;
             public int y;
 
-            public CellData(int X, int Y)
-            {
+            public CellData(int X, int Y) {
                 x = X;
                 y = Y;
             }
         }
 
-        private struct RowData
-        {
+        private struct RowData {
             public float width;
             public float height;
             public int itemCount;
 
-            public RowData(float _width, float _height, int _itemCount)
-            {
+            public RowData(float _width, float _height, int _itemCount) {
                 width = _width;
                 height = _height;
                 itemCount = _itemCount;
@@ -48,38 +44,32 @@ namespace UnityEngine.UI
         private List<CellData> m_CellDataList = new List<CellData>();
         private List<RowData> m_RowDataList = new List<RowData>();
 
-        public override void CalculateLayoutInputHorizontal()
-        {
+        public override void CalculateLayoutInputHorizontal() {
             base.CalculateLayoutInputHorizontal();
-            CalculateLayoutInput((int)m_StartAxis);
-            float width = preferredWidth + padding.horizontal;
-            SetLayoutInputForAxis(width, width, -1, 0);
+            CalculateLayoutInput((int) m_StartAxis);
+            SetLayoutInputForAxis(preferredWidth, preferredWidth, -1, 0);
         }
 
-        public override void CalculateLayoutInputVertical()
-        {
-            CalculateLayoutInput((int)m_StartAxis);
-            float height = preferredHeight + padding.vertical;
-            SetLayoutInputForAxis(height, height, -1, 1);
+        public override void CalculateLayoutInputVertical() {
+            CalculateLayoutInput((int) m_StartAxis);
+            SetLayoutInputForAxis(preferredHeight, preferredHeight, -1, 1);
         }
 
-        public override void SetLayoutHorizontal()
-        {
+        public override void SetLayoutHorizontal() {
             SetCellsAlongAxis(0);
         }
 
-        public override void SetLayoutVertical()
-        {
+        public override void SetLayoutVertical() {
             SetCellsAlongAxis(1);
         }
 
-        private void CalculateLayoutInput(int axis)
-        {
+        private void CalculateLayoutInput(int axis) {
             m_CellDataList.Clear();
             m_RowDataList.Clear();
 
             float size = rectTransform.rect.size[axis];
-            float availableSize = size - (axis == 1 ? padding.vertical : padding.horizontal);
+            float padding = (axis == 1 ? base.padding.vertical : base.padding.horizontal);
+            float availableSize = size - padding;
 
             int itemCount = 0;
             Vector2 maxSize = Vector2.zero;
@@ -87,11 +77,10 @@ namespace UnityEngine.UI
             Vector2Int row = Vector2Int.zero;
 
             int count = rectChildren.Count;
-            for (int i = 0; i < count; i++)
-            {
+            for (int i = 0; i < count; i++) {
                 RectTransform child = rectChildren[i];
-                GetChildSizes(child, 0, m_ChildControlWidth, false, out var xMin, out var xPreferred, out var xFlexible);
-                GetChildSizes(child, 1, m_ChildControlHeight, false, out var yMin, out var yPreferred, out var yFlexible);
+                GetChildSizes(child, 0, m_ChildControlWidth, out var xMin, out var xPreferred, out var xFlexible);
+                GetChildSizes(child, 1, m_ChildControlHeight, out var yMin, out var yPreferred, out var yFlexible);
                 Vector2 cellSize = new Vector2(xPreferred, yPreferred);
 
                 // Handle the spacing properly for the first item in the row
@@ -99,8 +88,7 @@ namespace UnityEngine.UI
                 float maxPosition = totalPreferred[axis] + space + cellSize[axis];
 
                 // Check if wrapping to a new row is needed
-                if (itemCount > 0 && maxPosition > availableSize)
-                {
+                if (itemCount > 0 && maxPosition > availableSize) {
                     m_RowDataList.Add(new RowData(totalPreferred[0], totalPreferred[1], itemCount));
 
                     maxSize[axis] = Mathf.Max(maxSize[axis], totalPreferred[axis]);
@@ -126,31 +114,29 @@ namespace UnityEngine.UI
             }
 
             // Final row (in case it ended without wrap)
-            if (itemCount > 0)
-            {
+            if (itemCount > 0) {
                 m_RowDataList.Add(new RowData(totalPreferred[0], totalPreferred[1], itemCount));
 
                 maxSize[axis] = Mathf.Max(maxSize[axis], totalPreferred[axis]);
                 maxSize[1 - axis] += totalPreferred[1 - axis];
-
-                SetLayoutInputForAxis(maxSize[0], maxSize[0], -1, 0);
-                SetLayoutInputForAxis(maxSize[1], maxSize[1], -1, 1);
             }
+
+            float totalPreferedX = maxSize[0] + padding;
+            float totalPreferedY = maxSize[1] + padding;
+
+            SetLayoutInputForAxis(totalPreferedX, totalPreferedX, 0f, 0);
+            SetLayoutInputForAxis(totalPreferedY, totalPreferedY, 0f, 1);
         }
 
-        private void SetCellsAlongAxis(int axis)
-        {
+        private void SetCellsAlongAxis(int axis) {
             int count = rectChildren.Count;
-            if (axis == 0)
-            {
-                for (int i = 0; i < count; i++)
-                {
+            if (axis == 0) {
+                for (int i = 0; i < count; i++) {
                     RectTransform rectTransform = rectChildren[i];
                     m_Tracker.Add(this, rectTransform, DrivenTransformProperties.Anchors | DrivenTransformProperties.AnchoredPosition);
                     rectTransform.anchorMin = Vector2.up;
                     rectTransform.anchorMax = Vector2.up;
-                    rectTransform.sizeDelta = m_StartAxis switch
-                    {
+                    rectTransform.sizeDelta = m_StartAxis switch {
                         Axis.Horizontal => new Vector2(rectTransform.sizeDelta.x, cellSize.y),
                         _ => new Vector2(cellSize.x, rectTransform.sizeDelta.y),
                     };
@@ -159,8 +145,8 @@ namespace UnityEngine.UI
             }
 
             bool isVertical = m_StartAxis == Axis.Vertical;
-            bool reverseX = ((int)startCorner % 2) == 1;
-            bool reverseY = ((int)startCorner / 2) == 1;
+            bool reverseX = ((int) startCorner % 2) == 1;
+            bool reverseY = ((int) startCorner / 2) == 1;
 
             int lastRowIndex = -1;
             float currentPos = 0f;
@@ -171,13 +157,12 @@ namespace UnityEngine.UI
             int num2 = num ? count - 1 : 0;
             int num3 = num ? 0 : count;
             int num4 = num ? -1 : 1;
-            for (int i = num2; num ? i >= num3 : i < num3; i += num4)
-            {
+            for (int i = num2; num ? i >= num3 : i < num3; i += num4) {
                 RectTransform child = rectChildren[i];
                 CellData cell = m_CellDataList[i];
 
-                GetChildSizes(child, 0, !isVertical && m_ChildControlWidth, false, out var xMin, out var xPreferred, out var xFlexible);
-                GetChildSizes(child, 1, isVertical && m_ChildControlHeight, false, out var yMin, out var yPreferred, out var yFlexible);
+                GetChildSizes(child, 0, !isVertical && m_ChildControlWidth, out var xMin, out var xPreferred, out var xFlexible);
+                GetChildSizes(child, 1, isVertical && m_ChildControlHeight, out var yMin, out var yPreferred, out var yFlexible);
 
                 int positionX = cell.x;
                 int positionY = cell.y;
@@ -185,10 +170,8 @@ namespace UnityEngine.UI
                 int rowIndex = isVertical ? positionX : positionY;
                 RowData row = m_RowDataList[rowIndex];
 
-                if (isVertical)
-                {
-                    if (lastRowIndex != rowIndex)
-                    {
+                if (isVertical) {
+                    if (lastRowIndex != rowIndex) {
                         lastRowIndex = rowIndex;
                         float rowHeight = row.height;
                         startOffsetX = GetStartOffset(0, preferredWidth);
@@ -208,8 +191,7 @@ namespace UnityEngine.UI
                 }
                 else // Horizontal
                 {
-                    if (lastRowIndex != rowIndex)
-                    {
+                    if (lastRowIndex != rowIndex) {
                         lastRowIndex = rowIndex;
                         float rowWidth = row.width;
                         startOffsetX = GetStartOffset(0, rowWidth);
@@ -230,25 +212,16 @@ namespace UnityEngine.UI
             }
         }
 
-        private void GetChildSizes(RectTransform child, int axis, bool controlSize, bool childForceExpand, out float min, out float preferred, out float flexible)
-        {
-            if (!controlSize)
-            {
-                min = child.sizeDelta[axis];
-                preferred = min;
-                flexible = 0f;
-            }
-            else
-            {
-                min = LayoutUtility.GetMinSize(child, axis);
-                preferred = LayoutUtility.GetPreferredSize(child, axis);
-                flexible = LayoutUtility.GetFlexibleSize(child, axis);
-            }
-
-            if (childForceExpand)
-            {
-                flexible = Mathf.Max(flexible, 1f);
-            }
+        private void GetChildSizes(RectTransform child, int axis, bool controlSize, out float min, out float preferred, out float flexible) {
+            min = !controlSize ?
+                child.sizeDelta[axis] :
+                (m_StartAxis, axis) switch {
+                    (Axis.Horizontal, 1) or
+                    (Axis.Vertical, 0) => cellSize[axis],
+                    _ => LayoutUtility.GetPreferredSize(child, axis)
+                };
+            preferred = min;
+            flexible = 0f;
         }
     }
 }

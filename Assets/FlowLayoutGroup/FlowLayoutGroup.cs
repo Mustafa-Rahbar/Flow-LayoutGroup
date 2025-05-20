@@ -46,12 +46,12 @@ namespace UnityEngine.UI {
 
         public override void CalculateLayoutInputHorizontal() {
             base.CalculateLayoutInputHorizontal();
-            CalculateLayoutInput((int) m_StartAxis);
+            CalculateLayoutInput((int)m_StartAxis);
             SetLayoutInputForAxis(preferredWidth, preferredWidth, -1, 0);
         }
 
         public override void CalculateLayoutInputVertical() {
-            CalculateLayoutInput((int) m_StartAxis);
+            CalculateLayoutInput((int)m_StartAxis);
             SetLayoutInputForAxis(preferredHeight, preferredHeight, -1, 1);
         }
 
@@ -145,8 +145,8 @@ namespace UnityEngine.UI {
             }
 
             bool isVertical = m_StartAxis == Axis.Vertical;
-            bool reverseX = ((int) startCorner % 2) == 1;
-            bool reverseY = ((int) startCorner / 2) == 1;
+            bool reverseX = ((int)startCorner % 2) == 1;
+            bool reverseY = ((int)startCorner / 2) == 1;
 
             int lastRowIndex = -1;
             float currentPos = 0f;
@@ -188,9 +188,7 @@ namespace UnityEngine.UI {
                     else SetChildAlongAxisWithScale(child, 1, posYFinal, child.localScale.y);
 
                     currentPos += yPreferred + spacing.y;
-                }
-                else // Horizontal
-                {
+                } else {            // Horizontal
                     if (lastRowIndex != rowIndex) {
                         lastRowIndex = rowIndex;
                         float rowWidth = row.width;
